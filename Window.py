@@ -2,6 +2,8 @@ import tkinter as tk
 from PIL import Image, ImageTk
 from itertools import count
 
+# pip install pillow
+
 class Window(tk.Label):
     """a label that displays images, and plays them if they are gifs"""
 
