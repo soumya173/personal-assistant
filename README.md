@@ -9,3 +9,12 @@ Tasks includes,
 5. Search for directories in the PC etc.
 
 More features will be included soon...
+
+# Module Installation guide
+- pip install gTTS
+- pip install pyttsx3
+- pip install SpeechRecognition
+- pip install playsound
+- http://www.nirsoft.net/utils/nircmd.html - Download nirCmd to execute commands
+- pip install chatterbot
+- pip install pillow
