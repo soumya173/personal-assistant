@@ -10,6 +10,7 @@ import tkinter as tk
 import threading
 import paramiko
 import re
+import win32com.client
 # import keyboard
 
 import Window
@@ -96,7 +97,7 @@ class Assistant(threading.Thread):
 			self.speak("Sorry, if I made some mistake. I won't disappoint you next time.")
 
 		if "who are you" == data:
-			self.speak("My name is Walter, a Personal Assistant designed by Mr. Heisenberg. I am here to make things easy for you.")
+			self.speak("My name is Walter, a Personal Assistant designed by HeisenBug. I am here to make things easy for you.")
 
 		if "what you can do" == data:
 			self.speak("I can do a couple of things right now. Like, google something, open some website, shutdown or restart or lock the PC and some other things.")
@@ -139,7 +140,7 @@ class Assistant(threading.Thread):
 			webbrowser.open_new_tab(query)
 
 		if "search folder" in data.lower():
-			searchFolder()
+			self.searchFolder()
 
 		# if "shutdown the PC" in data:
 		#     #Codes to shutdown
@@ -155,9 +156,10 @@ class Assistant(threading.Thread):
 		if "lock the PC" in data:
 			#Codes to lock the pc
 			self.speak("Locking the PC.")
-			os.popen('gnome-screensaver-command --lock')
+			# os.popen('gnome-screensaver-command --lock')
+			os.system("rundll32.exe user32.dll,LockWorkStation")
 
-		if "take rest" in data:
+		if "good bye" in data:
 			self.speak("Okay. See you next time.")
 			exit()
 
@@ -176,9 +178,31 @@ class Assistant(threading.Thread):
 			self.speak("Done.")
 			os.system("nircmd.exe mutesysvolume 2")
 
-		if "ping" in data.lower():
-			self.speak("Pinging.")
-			self.ping_sbc()
+		if data.lower().startswith("ping"):
+			startIndex = len("ping ")
+			sbcName = data[startIndex:]
+			self.speak("Pinging " + sbcName)
+			self.ping_sbc(sbcName)
+
+		if data.lower().startswith("search jira"):
+			self.searchJira()
+
+		if data.lower().startswith("search wiki"):
+			self.searchWiki()
+
+		if data.lower().startswith("query jira"):
+			self.queryJira()
+
+		if data.lower().startswith("what do i have today"):
+			meetings = self.getCalendarEntries()
+			numMeetings = len(meetings['Subject'])
+			if numMeetings == 0:
+				self.speak("You don't have any meetings today.")
+			else:
+				meetingHour = meetings['StartHour'][0]
+				meetingMin = meetings['StartMinute'][0]
+
+				self.speak("You have " + str(numMeetings) + " meeting today. Stating from " + str(meetingHour) + " " + str(meetingMin))
 
 	def main(self):
 		welcomeText = "Hello! How can I help you?"
@@ -186,7 +210,8 @@ class Assistant(threading.Thread):
 		time.sleep(2)
 		self.speak(welcomeText)
 
-		self.ping_sbc()
+		ev = self.getCalendarEntries()
+		print(ev)
 
 		while True:
 			try:
@@ -216,58 +241,138 @@ class Assistant(threading.Thread):
 		engine.setProperty('volume',0.9)
 		engine.runAndWait()
 
-	def ping_sbc(self):
+	def ping_sbc(self, sbcName):
+		ipsFile = open("config/config.txt", "r")
+
+		sbcIp = ""
+		username = ""
+		password = ""
+		hostIp = ""
+		for fileLine in ipsFile:
+			if fileLine.startswith("#"):
+				continue
+
+			lineLis = fileLine.split(":")
+			if lineLis[0] == sbcName :
+				sbcIp = lineLis[1].strip()
+
+			if lineLis[0] == "username" :
+				username = lineLis[1].strip()
+
+			if lineLis[0] == "password" :
+				password = lineLis[1].strip()
+
+			if lineLis[0] == "host_ip" :
+				hostIp = lineLis[1].strip()
+
+		ipsFile.close()
+
+		if sbcIp == "" :
+			self.speak("SBC IP is not configured.")
+			return
+
+		if username == "":
+			self.speak("Username is not configured")
+			return
+
+		if password == "":
+			self.speak("Password is not configured")
+			return
+
+		if hostIp == "":
+			self.speak("Host IP is not configured")
+			return
+
 		client = paramiko.SSHClient()
 		client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 		try:
-			client.connect("10.54.81.11", 22, "sgorai", "Welcome123")
+			client.connect(hostIp, 22, username, password)
 		except paramiko.AuthenticationException as e:
 			self.speak("Authentication Exception Occured")
-		# except socket.error as e:
-		# 	self.speak("Socket Error.")
-
-		ipsFile = open("config/ips.txt", "r")
-
-		sbcIp = ""
-		for fileLine in ipsFile:
-			lineLis = fileLine.split(":")
-			if lineLis[0] == "sbc_ip":
-				sbcIp = lineLis[1]
-				break
-		ipsFile.close()
 
 		command = "ping -w 5 {sbcIp}".format(sbcIp=sbcIp)
 		(stdin, stdout, stderr) = client.exec_command(command)
 		pingFlag = 0
 		for line in stdout.readlines():
-		        # print(line)
 		        if re.search( r'.*100% packet loss.*', line, re.M|re.I):
-		        	self.speak(sbcIp + " is not pinging")
+		        	resposes = ["not pinging", "not available", "is down"]
+		        	self.speak(sbcName + " is " + resposes[randint(0, len(resposes)-1)])
 		        	pingFlag = 1
 		        	break
 
 		if pingFlag == 0:
-			self.speak(sbcIp + " is pinging perfectly")
+			self.speak(sbcName + " is pinging perfectly")
 		client.close()
-		# print("STDIN")
-		# print(" ".join(stdin))
-		# print("STDOUT")
-		# print(" ".join(stdout))
-		# print("STDERR")
-		# print(" ".join(stderr))
 
+	def searchJira(self):
+		self.speak("Okay, tell me the JIRA ID.")
+		data = self.listener.listen()
 
-	# # Search for a folder
+		dataLis = data.split(" ")
+		projectName = dataLis[0].upper()
+		jiraId = "".join(dataLis[1:])
+		# jiraId = data.replace(" ", "-")
+
+		query = "https://jira.rbbn.com/browse/%s-%s" %(projectName, jiraId)
+		print (query)
+		self.speak("There you go.")
+		webbrowser.open_new_tab(query)
+
+	def searchWiki(self):
+		self.speak("Tell me what should I search?")
+		data = self.listener.listen()
+
+		query = "https://wiki.sonusnet.com/dosearchsite.action?queryString=%s" %(data)
+		print (query)
+		self.speak("There you go.")
+		webbrowser.open_new_tab(query)
+
+	def queryJira(self):
+		self.speak("Sure, tell me what should I search?")
+		data = self.listener.listen()
+		# filteredData = data.replace(" ", "%20")
+		query = "https://jira.rbbn.com/issues/?jql=text%20~%20\"" + data +"\"%20ORDER%20BY%20updated%20DESC"
+		self.speak("There you go.")
+		webbrowser.open_new_tab(query)
+
+	def getCalendarEntries(self, days=1):
+		"""
+		Returns calender entries for days default is 1
+		"""
+		Outlook = win32com.client.Dispatch("Outlook.Application")
+		ns = Outlook.GetNamespace("MAPI")
+		appointments = ns.GetDefaultFolder(9).Items
+		appointments.Sort("[Start]")
+		appointments.IncludeRecurrences = "True"
+		today = datetime.datetime.today()
+		begin = today.date().strftime("%d/%m/%Y")
+		tomorrow= datetime.timedelta(days=days)+today
+		end = tomorrow.date().strftime("%d/%m/%Y")
+		appointments = appointments.Restrict("[Start] >= '" +begin+ "' AND [END] <= '" +end+ "'")
+		events={'StartHour':[], 'StartMinute':[], 'Subject':[],'Duration':[]}
+		for a in appointments:
+			# adate=datetime.datetime.fromtimestamp(int(a.Start))
+			meetingStart = str(a.Start)
+			(date, time) =meetingStart.split(" ")
+			(hour, minute, junk1, junk2) = time.split(":")
+
+			events['StartHour'].append(hour)
+			events['StartMinute'].append(minute)
+			events['Subject'].append(a.Subject)
+			events['Duration'].append(a.Duration)
+		return events
+
+	# Search for a folder
 	def searchFolder(self):
-		speak("Okay, tell me the name of the folder.")
+		self.speak("Okay, tell me the name of the folder.")
 
 		# Home directories
 		# spaths = [r"/home/soumya/", r"/media/soumya/Docs/", r"/media/soumya/Entertainment/"]
-		spaths= [r"E:\\"]
+		spaths= [r"D:\\"]
 
-		folderName = listenToMe()
+		folderName = self.listener.listen()
 		folderName = folderName.lower()
-		speak("Searching, Please wait.")
+		self.speak("Searching, Please wait.")
 		print("Searching...")
 
 		flag = 0
@@ -279,7 +384,7 @@ class Assistant(threading.Thread):
 
 			for dir in dirs:
 				if folderName.lower() == str(dir).lower():
-					speak("There you go.")
+					self.speak("There you go.")
 					print("Found: " + str(dir) + " @ " + str(root))
 					flag = 1
 
@@ -302,7 +407,7 @@ class Assistant(threading.Thread):
 				spaths.append(pathToAppend)
 
 		if flag == 0:
-			speak("Sorry, specified directory not found.")
+			self.speak("Sorry, specified directory not found.")
 
 
 if __name__ == '__main__':

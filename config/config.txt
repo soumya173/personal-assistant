@@ -1,0 +1,7 @@
+username:sgorai
+password:Welcome123
+host_ip:10.54.81.11
+piano:10.54.59.16
+guitar:10.54.59.21
+sbc:10.54.78.132
+sbc_port:2024
