@@ -18,12 +18,13 @@ import Listener
 ######################################################
 # Module Installation guide
 # ---------------------------------------------------
-# pip install gTTS
+# Use Python 3.6 because Python 3.7 does not have support for PyAudio
+# pip install gTTS (Not used now)
 # pip install pyttsx3
 # pip install SpeechRecognition
 # pip install playsound
 # http://www.nirsoft.net/utils/nircmd.html - Download nirCmd to execute commands
-# pip install chatterbot
+# pip install chatterbot (Not used. Not implemented yet)
 # pip install pillow
 ######################################################
 
@@ -59,10 +60,10 @@ class Assistant(threading.Thread):
         labelText1.set("")
 
         labelText2 = tk.StringVar()
-        self.label1 = tk.Label(root, textvariable=labelText1, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
-        self.label2 = tk.Label(root, textvariable=labelText2, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
-        self.label1.pack()
-        self.label2.pack()
+        self.userlabel = tk.Label(root, textvariable=labelText1, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
+        self.walterlabel = tk.Label(root, textvariable=labelText2, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
+        self.userlabel.pack()
+        self.walterlabel.pack()
 
         self.window = Window.Window(root)
         self.window.pack()
@@ -188,17 +189,21 @@ class Assistant(threading.Thread):
 
                 labelText = tk.StringVar()
                 labelText.set(data)
-                self.label1.config(textvariable=labelText)
+                self.userlabel.config(textvariable=labelText)
 
                 self.process(data)
             except KeyboardInterrupt as e:
                 print("Exiting...")
                 os._exit(0)
+            except Exception as e:
+            	labelText = tk.StringVar()
+            	labelText.set("Opps! Exception alert. Check terminal.")
+            	self.userlabel.config(textvariable=labelText)
 
     def speak(self, message):
         labelText = tk.StringVar()
         labelText.set(message)
-        self.label2.config(textvariable=labelText)
+        self.walterlabel.config(textvariable=labelText)
 
         engine = pyttsx3.init()
         engine.say(message)
