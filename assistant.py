@@ -5,15 +5,19 @@ import calendar
 import datetime
 import time
 import webbrowser
-from playsound import playsound
 import tkinter as tk
 import threading
-# import keyboard
+import logging
+import subprocess
+
+try:
+    from playsound import playsound
+except ImportError as e:
+    init_logging()
+    init_packages()
 
 import Window
 import Listener
-
-# from time import ctime
 
 ######################################################
 # Module Installation guide
@@ -27,10 +31,54 @@ import Listener
 # pip install chatterbot (Not used. Not implemented yet)
 # pip install pillow
 ######################################################
+def init_logging():
+    #Create and configure logger
+    global logger
+    if not os.path.exists(os.path.join("log")):
+        os.makedirs("log")
+    logfilename = "walterlog-"  + datetime.datetime.now().strftime("%I-%M%p-%d-%B-%Y")
+    filepath = os.path.join("log", logfilename + ".log")
+    logging.basicConfig(filename=filepath,
+                        format='%(asctime)s %(levelname)s : %(message)s',
+                        filemode='a+')
+
+    logger=logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+def init_packages():
+    # Add check for python 3.6
+    if sys.version_info.major != 3 and sys.version_info.minor != 6:
+        logger.error("Python version required 3.6 but found " + sys.version_info.major + "." + sys.version_info.minor)
+        logger.debug("PyAudio package doesn't have support for python version > 3.6")
+        os._exit(0)
+
+    # Add check for dependent modules
+    try:
+        import pip
+        reqs = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze'])
+        installed_packages = [r.decode().split('==')[0] for r in reqs.split()]
+
+        required_pkgs = ['pyttsx3', 'playsound', 'pillow', 'pyaudio']
+        for pkg in required_pkgs:
+            if pkg not in [x.lower() for x in installed_packages]:
+                print(pkg)
+                logger.debug(pkg + "is not installed in the system.")
+                install(pkg)
+    except ImportError as e:
+        logger.error("pip is not installed. Please install pip to continue.")
+        logger.debug(str(e))
+        os.exit(0)
+
+def install(package):
+    logger.debug("Installing package " + package)
+    if hasattr(pip, 'main'):
+        pip.main(['install', package])
+    else:
+        pip._internal.main(['install', package])
 
 class Assistant(threading.Thread):
     """docstring for Assistant"""
-    def __init__(self, name):
+    def __init__(self):
         self.abusive = ["bitch", "fuck", "asshole", "fucker", "motherfucker"]
         self.listener = Listener.Listener()
 
@@ -39,7 +87,7 @@ class Assistant(threading.Thread):
 
     def quitWindow(self, root):
         root.destroy()
-        print("Window Destroyed.")
+        logger.info("Destroying window.")
         os._exit(0)
 
     def run(self):
@@ -61,17 +109,17 @@ class Assistant(threading.Thread):
 
         labelText2 = tk.StringVar()
         self.userlabel = tk.Label(root, textvariable=labelText1, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
-        self.walterlabel = tk.Label(root, textvariable=labelText2, fg='white', bg='#1c1b1b', pady=10, font=("Courier", 20), wraplength=800)
+        self.walterlabel = tk.Label(root, textvariable=labelText2, fg='white', bg='#1c1b1b', pady=20, font=("Courier", 20), wraplength=800)
         self.userlabel.pack()
         self.walterlabel.pack()
 
         self.window = Window.Window(root)
         self.window.pack()
         self.window.load("siri.gif")
-        # label = tk.Label()
         self.window.mainloop()
 
     def process(self, data):
+        logger.debug("Processing " + data)
         #Checks for abusive words
         words = data.split(" ")
 
@@ -156,7 +204,7 @@ class Assistant(threading.Thread):
 
         if "take rest" in data:
             self.speak("Okay. See you next time.")
-            exit()
+            os._exit(0)
 
         if "mute the pc" in data.lower():
             #Codes to mute the sound
@@ -176,15 +224,16 @@ class Assistant(threading.Thread):
     def main(self):
         welcomeText = "Hello! How can I help you?"
 
-        time.sleep(2)
+        time.sleep(1)
         self.speak(welcomeText)
         while True:
             try:
                 data = ""
+                logger.debug("Listening...")
                 data = self.listener.listen()
 
                 if data == -1 or data == -2:
-                    # self.speak("Sorry, couldn't understand your voice.")
+                    logger.debug("Failed to understand the voice")
                     continue
 
                 labelText = tk.StringVar()
@@ -193,14 +242,17 @@ class Assistant(threading.Thread):
 
                 self.process(data)
             except KeyboardInterrupt as e:
-                print("Exiting...")
+                logger.info("You pressed <ESC>. Exiting...")
                 os._exit(0)
             except Exception as e:
-            	labelText = tk.StringVar()
-            	labelText.set("Opps! Exception alert. Check terminal.")
-            	self.userlabel.config(textvariable=labelText)
+                logger.error("Exception occured")
+                logger.error(str(e))
+                labelText = tk.StringVar()
+                labelText.set("Opps! Exception alert. Check terminal.")
+                self.userlabel.config(textvariable=labelText)
 
     def speak(self, message):
+        logger.debug("Speaking: " + message)
         labelText = tk.StringVar()
         labelText.set(message)
         self.walterlabel.config(textvariable=labelText)
@@ -221,23 +273,23 @@ class Assistant(threading.Thread):
         folderName = listenToMe()
         folderName = folderName.lower()
         speak("Searching, Please wait.")
-        print("Searching...")
+        logger.debug("Searching for directory: " + folderName)
 
         flag = 0
         while(len(spaths) > 0):
             currentPath = spaths[0]
-            print("Currently searching: "+currentPath)
+            logger.debug("Searching: " + currentPath)
             root, dirs, _ = next(os.walk(currentPath))
-
 
             for dir in dirs:
                 if folderName.lower() == str(dir).lower():
                     speak("There you go.")
-                    print("Found: " + str(dir) + " @ " + str(root))
+                    logger.debug("Found: " + str(dir) + " @ " + str(root))
                     flag = 1
 
                     # To open the explorer
                     pathToOpen = os.path.join(root, str(dir))
+                    logger.debug("Opening path in window: " + pathToOpen)
                     webbrowser.open(pathToOpen)
                     break
 
@@ -255,16 +307,12 @@ class Assistant(threading.Thread):
                 spaths.append(pathToAppend)
 
         if flag == 0:
+            logger.debug("Directory not found: " + folderName)
             speak("Sorry, specified directory not found.")
 
-
 if __name__ == '__main__':
-    # root = tk.Tk()
-    # window = Window.Window(root)
-    # # window.setVars("siri.gif")
-    # window.pack()
-    # window.load("siri.gif")
-    # window.mainloop()
+    init_logging()
+    init_packages()
 
-    assitant = Assistant("siri.gif")
+    assitant = Assistant()
     assitant.main()
